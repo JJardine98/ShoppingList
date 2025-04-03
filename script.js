@@ -134,61 +134,97 @@ function addScanningStyles() {
 // Improved barcode scanning function
 async function startBarcodeScan() {
     try {
+        // Check if BarcodeDetector is supported
+        if (!('BarcodeDetector' in window)) {
+            throw new Error('Barcode scanning is not supported in your browser. Please use Chrome or Edge.');
+        }
+
         // Create preview container
         const previewContainer = document.createElement('div');
         previewContainer.className = 'camera-preview';
         previewContainer.innerHTML = `
             <div class="scanning-message">Point camera at barcode</div>
-            <div id="reader"></div>
+            <div class="focus-box"></div>
+            <video id="scanner-video" autoplay playsinline></video>
             <button class="cancel-btn">Cancel Scan</button>
         `;
         document.body.appendChild(previewContainer);
 
-        // Initialize scanner
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader",
-            { 
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-                formatsToSupport: [
-                    "EAN_13",
-                    "EAN_8",
-                    "UPC_A",
-                    "UPC_E",
-                    "CODE_128",
-                    "CODE_39",
-                    "CODE_93",
-                    "ITF"
-                ]
-            },
-            false
-        );
+        // Get video element
+        const video = document.getElementById('scanner-video');
+
+        // Request camera access
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'environment',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
+
+        // Set video source
+        video.srcObject = stream;
+
+        // Wait for video to be ready
+        await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                video.play();
+                resolve();
+            };
+        });
+
+        // Initialize barcode detector
+        const barcodeDetector = new BarcodeDetector({
+            formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'itf']
+        });
+
+        let isScanning = true;
+
+        // Start scanning loop
+        async function scan() {
+            if (!isScanning) return;
+
+            try {
+                const barcodes = await barcodeDetector.detect(video);
+                
+                if (barcodes.length > 0) {
+                    const barcode = barcodes[0];
+                    console.log('Barcode detected:', barcode.rawValue);
+                    
+                    isScanning = false;
+                    stream.getTracks().forEach(track => track.stop());
+                    previewContainer.remove();
+                    
+                    try {
+                        await lookupProduct(barcode.rawValue);
+                    } catch (error) {
+                        console.error('Error looking up product:', error);
+                        alert('Product not found. Adding barcode instead.');
+                        addItem(barcode.rawValue);
+                    }
+                } else {
+                    // Continue scanning
+                    requestAnimationFrame(scan);
+                }
+            } catch (error) {
+                console.error('Scanning error:', error);
+                requestAnimationFrame(scan);
+            }
+        }
 
         // Start scanning
-        html5QrcodeScanner.render(
-            (decodedText) => {
-                console.log('Barcode detected:', decodedText);
-                html5QrcodeScanner.clear();
-                previewContainer.remove();
-                lookupProduct(decodedText);
-            },
-            (errorMessage) => {
-                // Ignore errors about not finding QR codes
-                if (!errorMessage.includes('No QR code')) {
-                    console.error('Scanning error:', errorMessage);
-                }
-            }
-        );
+        scan();
 
         // Handle cancel button
         previewContainer.querySelector('.cancel-btn').onclick = () => {
-            html5QrcodeScanner.clear();
+            isScanning = false;
+            stream.getTracks().forEach(track => track.stop());
             previewContainer.remove();
         };
 
     } catch (error) {
         console.error('Error accessing camera:', error);
-        alert('Error accessing camera. Please ensure you have granted camera permissions and try again.');
+        alert('Error: ' + error.message);
     }
 }
 
