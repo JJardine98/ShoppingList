@@ -96,22 +96,28 @@ button {
     justify-content: center;
     gap: 0.5rem;
     white-space: nowrap;
+    font-weight: 500;
 }
 
-.add-btn, .scan-btn {
+.add-btn {
     background-color: var(--primary-color);
     color: var(--bg-color);
-    padding: 0.8rem;
-    border-radius: 8px;
-    min-width: 48px;
+    min-width: 100px;
     height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
 }
 
-.add-btn:hover, .scan-btn:hover {
+.add-btn:hover {
+    background-color: var(--primary-hover);
+}
+
+.scan-btn {
+    background-color: var(--primary-color);
+    color: var(--bg-color);
+    min-width: 120px;
+    height: 48px;
+}
+
+.scan-btn:hover {
     background-color: var(--primary-hover);
 }
 
@@ -173,7 +179,7 @@ button {
     color: var(--bg-color);
     padding: 0.5rem 0.8rem;
     font-size: 0.9rem;
-    font-weight: 500;
+    min-width: 80px;
 }
 
 #shoppingList li button:hover {

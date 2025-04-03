@@ -80,8 +80,61 @@ function shareList() {
     }
 }
 
-// Barcode scanning functions
+// Add scanning styles to the document
+function addScanningStyles() {
+    if (!document.getElementById('scanning-styles')) {
+        const style = document.createElement('style');
+        style.id = 'scanning-styles';
+        style.textContent = `
+            .scanning-overlay {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 70%;
+                height: 40%;
+                border: 3px solid #00b894;
+                border-radius: 8px;
+                box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.5);
+                pointer-events: none;
+            }
+            
+            .scanning-message {
+                color: white;
+                font-size: 1.2rem;
+                margin-bottom: 1rem;
+                text-align: center;
+                padding: 0 1rem;
+                z-index: 10;
+            }
+            
+            .scanning-progress {
+                width: 80%;
+                max-width: 300px;
+                height: 4px;
+                background-color: rgba(255, 255, 255, 0.2);
+                border-radius: 2px;
+                margin-top: 1rem;
+                overflow: hidden;
+                position: relative;
+            }
+            
+            .scanning-progress-bar {
+                height: 100%;
+                width: 0%;
+                background-color: #00b894;
+                border-radius: 2px;
+                transition: width 0.2s;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+// Improved barcode scanning function
 async function startBarcodeScan() {
+    addScanningStyles();
+    
     try {
         // Check if camera is available
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -94,14 +147,20 @@ async function startBarcodeScan() {
         previewContainer.innerHTML = `
             <div class="scanning-message">Point camera at barcode</div>
             <video id="scanner-video" autoplay playsinline></video>
+            <div class="scanning-overlay"></div>
+            <div class="scanning-progress">
+                <div class="scanning-progress-bar"></div>
+            </div>
             <button class="cancel-btn">Cancel</button>
         `;
         
         // Add preview to page
         document.body.appendChild(previewContainer);
         
-        // Get video element
+        // Get video element and progress bar
         const video = document.getElementById('scanner-video');
+        const progressBar = previewContainer.querySelector('.scanning-progress-bar');
+        const scanMessage = previewContainer.querySelector('.scanning-message');
         
         // Request camera access
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -118,64 +177,137 @@ async function startBarcodeScan() {
         // Wait for video to be ready
         await new Promise((resolve) => {
             video.onloadedmetadata = () => {
+                video.play();
                 resolve();
             };
         });
         
-        // Make sure ZXing is loaded
+        // Check if ZXing library is available
         if (typeof ZXing === 'undefined') {
-            throw new Error('ZXing library not loaded. Please check your internet connection and refresh the page.');
+            throw new Error('Barcode scanning library not loaded. Please check your internet connection and refresh the page.');
         }
         
-        // Initialize barcode scanner
-        const codeReader = new ZXing.BrowserMultiFormatReader();
+        // Setup for barcode detection
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+            ZXing.BarcodeFormat.EAN_13,
+            ZXing.BarcodeFormat.EAN_8,
+            ZXing.BarcodeFormat.UPC_A,
+            ZXing.BarcodeFormat.UPC_E,
+            ZXing.BarcodeFormat.CODE_39,
+            ZXing.BarcodeFormat.CODE_128
+        ]);
+        
+        const reader = new ZXing.MultiFormatReader();
+        reader.setHints(hints);
+        
         let scannerActive = true;
+        let scanProgress = 0;
+        let lastSuccessTime = 0;
+        let consecutiveSuccesses = 0;
+        let lastDetectedCode = null;
         
-        // Function to handle results - add null check
-        const handleResult = (result) => {
-            if (!scannerActive) return;
-            
-            // Check if result is null
-            if (!result) {
-                console.log('No barcode detected');
-                return;
-            }
-            
-            console.log('Barcode detected:', result.getText());
-            scannerActive = false;
-            
-            // Stop camera
-            stream.getTracks().forEach(track => track.stop());
-            
-            // Reset code reader
-            codeReader.reset();
-            
-            // Remove preview
-            previewContainer.remove();
-            
-            // Look up product
-            lookupProduct(result.getText());
-        };
-        
-        // Cancel function to clean up resources
+        // Clean up function
         const cancelScan = () => {
             scannerActive = false;
-            codeReader.reset();
-            stream.getTracks().forEach(track => track.stop());
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
             previewContainer.remove();
         };
         
         // Handle cancel button
         previewContainer.querySelector('.cancel-btn').onclick = cancelScan;
         
-        // Start scanning with proper error handling
-        try {
-            await codeReader.decodeFromVideoDevice(undefined, 'scanner-video', handleResult);
-        } catch (scanError) {
-            console.error('Error during scanning:', scanError);
-            alert(`Error during scanning: ${scanError.message}`);
-            cancelScan();
-        }
+        // Manual frame capturing and analysis approach
+        const scanFrame = async () => {
+            if (!scannerActive) return;
+            
+            try {
+                // Only process if video is playing
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    // Reset progress slowly if no successful scan
+                    const now = Date.now();
+                    if (now - lastSuccessTime > 1000) {
+                        scanProgress = Math.max(0, scanProgress - 2);
+                        progressBar.style.width = `${scanProgress}%`;
+                    }
+                    
+                    // Set canvas dimensions to match video
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    // Draw current video frame to canvas
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Get image data for ZXing
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+                    const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+                    
+                    try {
+                        // Attempt to decode barcode from the frame
+                        const result = reader.decode(binaryBitmap, hints);
+                        
+                        if (result && result.getText()) {
+                            const detectedCode = result.getText();
+                            
+                            // Check if it's the same code as before
+                            if (detectedCode === lastDetectedCode) {
+                                // Update success stats
+                                lastSuccessTime = now;
+                                consecutiveSuccesses++;
+                                
+                                // Update progress bar
+                                scanProgress = Math.min(100, scanProgress + 10);
+                                progressBar.style.width = `${scanProgress}%`;
+                                
+                                // If we have enough consistent reads, consider it confirmed
+                                if (consecutiveSuccesses >= 3 || scanProgress >= 100) {
+                                    // Success! We've confirmed the barcode
+                                    scannerActive = false;
+                                    progressBar.style.width = '100%';
+                                    scanMessage.textContent = 'Barcode detected!';
+                                    scanMessage.style.color = '#00b894';
+                                    
+                                    setTimeout(() => {
+                                        cancelScan();
+                                        lookupProduct(detectedCode);
+                                    }, 500);
+                                    
+                                    return;
+                                }
+                            } else {
+                                // New code detected, start fresh
+                                lastDetectedCode = detectedCode;
+                                consecutiveSuccesses = 1;
+                                scanProgress = 20; // Start with some progress to show feedback
+                                progressBar.style.width = `${scanProgress}%`;
+                                lastSuccessTime = now;
+                            }
+                        }
+                    } catch (decodeError) {
+                        // Not a critical error, just means no barcode found in this frame
+                    }
+                }
+                
+                // Continue scanning if active
+                if (scannerActive) {
+                    requestAnimationFrame(scanFrame);
+                }
+            } catch (error) {
+                console.error('Error scanning frame:', error);
+                if (scannerActive) {
+                    requestAnimationFrame(scanFrame);
+                }
+            }
+        };
+        
+        // Start the scanning process
+        requestAnimationFrame(scanFrame);
         
     } catch (error) {
         console.error('Error in barcode scanning:', error);
@@ -183,14 +315,28 @@ async function startBarcodeScan() {
     }
 }
 
+// Product lookup function
 async function lookupProduct(barcode) {
     try {
+        // Show loading indicator
+        const loadingToast = document.createElement('div');
+        loadingToast.className = 'toast loading';
+        loadingToast.textContent = 'Looking up product...';
+        document.body.appendChild(loadingToast);
+        
         const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
         const data = await response.json();
         
+        // Remove loading indicator
+        loadingToast.remove();
+        
         if (data.status === 1 && data.product) {
             const product = data.product;
-            const itemName = product.product_name || product.generic_name || 'Unknown Product';
+            let itemName = product.product_name || product.generic_name;
+            
+            if (!itemName || itemName.trim() === '') {
+                itemName = 'Unknown Product (' + barcode + ')';
+            }
             
             // Add to shopping list
             shoppingList.push({ 
@@ -199,12 +345,112 @@ async function lookupProduct(barcode) {
             });
             saveList();
             renderList();
+            
+            // Show success toast
+            const successToast = document.createElement('div');
+            successToast.className = 'toast success';
+            successToast.textContent = `Added: ${itemName}`;
+            document.body.appendChild(successToast);
+            
+            // Remove toast after 3 seconds
+            setTimeout(() => {
+                successToast.classList.add('fade-out');
+                setTimeout(() => successToast.remove(), 500);
+            }, 3000);
+            
         } else {
-            alert('Product not found. Please try again or add manually.');
+            // Show not found toast
+            const errorToast = document.createElement('div');
+            errorToast.className = 'toast error';
+            errorToast.textContent = 'Product not found. Adding barcode instead.';
+            document.body.appendChild(errorToast);
+            
+            // Add barcode as an item
+            shoppingList.push({ 
+                text: `Unknown product (${barcode})`,
+                checked: false
+            });
+            saveList();
+            renderList();
+            
+            // Remove toast after 3 seconds
+            setTimeout(() => {
+                errorToast.classList.add('fade-out');
+                setTimeout(() => errorToast.remove(), 500);
+            }, 3000);
         }
     } catch (error) {
         console.error('Error looking up product:', error);
-        alert('Error looking up product. Please try again or add manually.');
+        
+        // Show error toast
+        const errorToast = document.createElement('div');
+        errorToast.className = 'toast error';
+        errorToast.textContent = 'Error looking up product. Adding barcode instead.';
+        document.body.appendChild(errorToast);
+        
+        // Add barcode as an item
+        shoppingList.push({ 
+            text: `Unknown product (${barcode})`,
+            checked: false
+        });
+        saveList();
+        renderList();
+        
+        // Remove toast after 3 seconds
+        setTimeout(() => {
+            errorToast.classList.add('fade-out');
+            setTimeout(() => errorToast.remove(), 500);
+        }, 3000);
+    }
+}
+
+// Add toast styles
+function addToastStyles() {
+    if (!document.getElementById('toast-styles')) {
+        const style = document.createElement('style');
+        style.id = 'toast-styles';
+        style.textContent = `
+            .toast {
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 12px 20px;
+                border-radius: 8px;
+                color: white;
+                font-weight: 500;
+                z-index: 1000;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                animation: toast-in 0.3s ease-out;
+            }
+            
+            .toast.loading {
+                background-color: #3498db;
+            }
+            
+            .toast.success {
+                background-color: #00b894;
+            }
+            
+            .toast.error {
+                background-color: #ff6b6b;
+            }
+            
+            .toast.fade-out {
+                animation: toast-out 0.5s ease-in forwards;
+            }
+            
+            @keyframes toast-in {
+                from { opacity: 0; transform: translate(-50%, 20px); }
+                to { opacity: 1; transform: translate(-50%, 0); }
+            }
+            
+            @keyframes toast-out {
+                from { opacity: 1; transform: translate(-50%, 0); }
+                to { opacity: 0; transform: translate(-50%, 20px); }
+            }
+        `;
+        document.head.appendChild(style);
     }
 }
 
@@ -215,5 +461,12 @@ document.getElementById('itemInput').addEventListener('keypress', function(e) {
     }
 });
 
-// Initial render
-renderList();
+// Initialize
+(function init() {
+    // Add styles
+    addScanningStyles();
+    addToastStyles();
+    
+    // Render initial list
+    renderList();
+})();
