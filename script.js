@@ -106,11 +106,21 @@ async function startBarcodeScan() {
         
         console.log('Camera access granted');
         
-        // Create video element
-        const video = document.createElement('video');
+        // Create preview container
+        const previewContainer = document.createElement('div');
+        previewContainer.className = 'camera-preview';
+        previewContainer.innerHTML = `
+            <div class="scanning-message">Point camera at barcode</div>
+            <video id="scanner-video" autoplay playsinline></video>
+            <button class="cancel-btn">Cancel</button>
+        `;
+        
+        // Add preview to page
+        document.body.appendChild(previewContainer);
+        
+        // Get video element
+        const video = document.getElementById('scanner-video');
         video.srcObject = stream;
-        video.setAttribute('playsinline', '');
-        video.setAttribute('autoplay', '');
         
         // Wait for video to be ready
         await new Promise((resolve) => {
@@ -119,18 +129,6 @@ async function startBarcodeScan() {
                 resolve();
             };
         });
-        
-        // Create preview container
-        const previewContainer = document.createElement('div');
-        previewContainer.className = 'camera-preview';
-        previewContainer.innerHTML = `
-            <div class="scanning-message">Point camera at barcode</div>
-            <video autoplay playsinline></video>
-            <button class="cancel-btn">Cancel</button>
-        `;
-        
-        // Add preview to page
-        document.body.appendChild(previewContainer);
         
         // Initialize barcode scanner
         const codeReader = new ZXing.BrowserBarcodeReader({
