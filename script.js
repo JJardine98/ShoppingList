@@ -83,13 +83,42 @@ function shareList() {
 // Barcode scanning functions
 async function startBarcodeScan() {
     try {
+        // Check if browser supports getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera access is not supported in this browser');
+        }
+
+        // Check if ZXing is loaded
+        if (!window.ZXing) {
+            throw new Error('Barcode scanning library not loaded');
+        }
+
+        console.log('Requesting camera access...');
+        
         // Request camera access
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'environment', // Prefer rear camera
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
+        
+        console.log('Camera access granted');
         
         // Create video element
         const video = document.createElement('video');
         video.srcObject = stream;
-        video.play();
+        video.setAttribute('playsinline', '');
+        video.setAttribute('autoplay', '');
+        
+        // Wait for video to be ready
+        await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                video.play();
+                resolve();
+            };
+        });
         
         // Create preview container
         const previewContainer = document.createElement('div');
@@ -104,11 +133,22 @@ async function startBarcodeScan() {
         document.body.appendChild(previewContainer);
         
         // Initialize barcode scanner
-        const codeReader = new ZXing.BrowserBarcodeReader();
+        const codeReader = new ZXing.BrowserBarcodeReader({
+            tryHarder: true,
+            formats: [
+                ZXing.BarcodeFormat.EAN_13,
+                ZXing.BarcodeFormat.EAN_8,
+                ZXing.BarcodeFormat.UPC_A,
+                ZXing.BarcodeFormat.UPC_E
+            ]
+        });
+        
+        console.log('Starting barcode scanning...');
         
         // Start scanning
         codeReader.decodeFromVideoDevice(null, video, (result, err) => {
             if (result) {
+                console.log('Barcode detected:', result.text);
                 // Stop camera
                 stream.getTracks().forEach(track => track.stop());
                 previewContainer.remove();
@@ -128,8 +168,8 @@ async function startBarcodeScan() {
         };
         
     } catch (error) {
-        console.error('Error accessing camera:', error);
-        alert('Could not access camera. Please ensure you have granted camera permissions.');
+        console.error('Error in barcode scanning:', error);
+        alert(`Error: ${error.message}\n\nPlease ensure:\n1. You have granted camera permissions\n2. You are using a supported browser\n3. Your device has a working camera`);
     }
 }
 
