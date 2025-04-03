@@ -139,71 +139,50 @@ async function startBarcodeScan() {
         previewContainer.className = 'camera-preview';
         previewContainer.innerHTML = `
             <div class="scanning-message">Point camera at barcode</div>
-            <div class="focus-box"></div>
-            <video id="scanner-video" autoplay playsinline></video>
+            <div id="reader"></div>
             <button class="cancel-btn">Cancel Scan</button>
         `;
         document.body.appendChild(previewContainer);
 
-        // Get video element
-        const video = document.getElementById('scanner-video');
+        // Initialize scanner
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            { 
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                formatsToSupport: [
+                    "EAN_13",
+                    "EAN_8",
+                    "UPC_A",
+                    "UPC_E",
+                    "CODE_128",
+                    "CODE_39",
+                    "CODE_93",
+                    "ITF"
+                ]
+            },
+            false
+        );
 
-        // Request camera access with better quality settings
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: 'environment',
-                width: { ideal: 1920 },
-                height: { ideal: 1080 },
-                frameRate: { ideal: 30 },
-                focusMode: 'continuous'
-            } 
-        });
-
-        // Set video source
-        video.srcObject = stream;
-
-        // Wait for video to be ready
-        await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                video.play();
-                resolve();
-            };
-        });
-
-        // Initialize ZXing scanner
-        const codeReader = new ZXing.BrowserBarcodeReader();
-        
-        // Set up scanning interval
-        const scanInterval = setInterval(async () => {
-            try {
-                const result = await codeReader.decodeFromVideoElement(video);
-                if (result) {
-                    console.log('Barcode detected:', result.text);
-                    
-                    // Only stop scanning if the product lookup is successful
-                    try {
-                        await lookupProduct(result.text);
-                        clearInterval(scanInterval);
-                        stream.getTracks().forEach(track => track.stop());
-                        previewContainer.remove();
-                    } catch (error) {
-                        console.error('Error looking up product:', error);
-                        // Keep scanning if product lookup fails
-                    }
+        // Start scanning
+        html5QrcodeScanner.render(
+            (decodedText) => {
+                console.log('Barcode detected:', decodedText);
+                html5QrcodeScanner.clear();
+                previewContainer.remove();
+                lookupProduct(decodedText);
+            },
+            (errorMessage) => {
+                // Ignore errors about not finding QR codes
+                if (!errorMessage.includes('No QR code')) {
+                    console.error('Scanning error:', errorMessage);
                 }
-            } catch (error) {
-                if (error.message.includes('No MultiFormat Readers were able to detect the code')) {
-                    // This is normal when no barcode is detected
-                    return;
-                }
-                console.error('Scanning error:', error);
             }
-        }, 500); // Check every 500ms
+        );
 
         // Handle cancel button
         previewContainer.querySelector('.cancel-btn').onclick = () => {
-            clearInterval(scanInterval);
-            stream.getTracks().forEach(track => track.stop());
+            html5QrcodeScanner.clear();
             previewContainer.remove();
         };
 
