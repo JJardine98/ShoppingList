@@ -83,18 +83,6 @@ function shareList() {
 // Barcode scanning functions
 async function startBarcodeScan() {
     try {
-        // Check if browser supports getUserMedia
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('Camera access is not supported in this browser');
-        }
-
-        // Check if Html5QrcodeScanner is loaded
-        if (!window.Html5QrcodeScanner) {
-            throw new Error('Barcode scanning library not loaded');
-        }
-
-        console.log('Requesting camera access...');
-        
         // Create preview container
         const previewContainer = document.createElement('div');
         previewContainer.className = 'camera-preview';
@@ -107,29 +95,18 @@ async function startBarcodeScan() {
         // Add preview to page
         document.body.appendChild(previewContainer);
         
-        // Initialize scanner
+        // Initialize scanner with basic settings
         const html5QrcodeScanner = new Html5QrcodeScanner(
             "reader",
             {
                 fps: 10,
-                qrbox: { width: 250, height: 250 },
-                formatsToSupport: [
-                    "EAN_13",
-                    "EAN_8",
-                    "UPC_A",
-                    "UPC_E",
-                    "CODE_128",
-                    "CODE_39",
-                    "CODE_93",
-                    "ITF"
-                ]
-            },
-            false
+                qrbox: 250
+            }
         );
 
         // Start scanning
         html5QrcodeScanner.render(
-            (decodedText, decodedResult) => {
+            (decodedText) => {
                 console.log('Barcode detected:', decodedText);
                 // Stop scanner
                 html5QrcodeScanner.clear();
