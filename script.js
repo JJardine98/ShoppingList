@@ -133,47 +133,35 @@ function addScanningStyles() {
 
 // Improved barcode scanning function
 async function startBarcodeScan() {
-    addScanningStyles();
-    
     try {
-        // Check if camera is available
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('Camera access is not supported in your browser');
-        }
-        
         // Create preview container
         const previewContainer = document.createElement('div');
         previewContainer.className = 'camera-preview';
         previewContainer.innerHTML = `
             <div class="scanning-message">Point camera at barcode</div>
+            <div class="focus-box"></div>
             <video id="scanner-video" autoplay playsinline></video>
-            <div class="scanning-overlay"></div>
-            <div class="scanning-progress">
-                <div class="scanning-progress-bar"></div>
-            </div>
-            <button class="cancel-btn">Cancel</button>
+            <button class="cancel-btn">Cancel Scan</button>
         `;
-        
-        // Add preview to page
         document.body.appendChild(previewContainer);
-        
-        // Get video element and progress bar
+
+        // Get video element
         const video = document.getElementById('scanner-video');
-        const progressBar = previewContainer.querySelector('.scanning-progress-bar');
-        const scanMessage = previewContainer.querySelector('.scanning-message');
-        
-        // Request camera access
+
+        // Request camera access with better quality settings
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: 'environment',
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                frameRate: { ideal: 30 },
+                focusMode: 'continuous'
             } 
         });
-        
+
         // Set video source
         video.srcObject = stream;
-        
+
         // Wait for video to be ready
         await new Promise((resolve) => {
             video.onloadedmetadata = () => {
@@ -181,137 +169,40 @@ async function startBarcodeScan() {
                 resolve();
             };
         });
+
+        // Initialize ZXing scanner
+        const codeReader = new ZXing.BrowserBarcodeReader();
         
-        // Check if ZXing library is available
-        if (typeof ZXing === 'undefined') {
-            throw new Error('Barcode scanning library not loaded. Please check your internet connection and refresh the page.');
-        }
-        
-        // Setup for barcode detection
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        const hints = new Map();
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-            ZXing.BarcodeFormat.EAN_13,
-            ZXing.BarcodeFormat.EAN_8,
-            ZXing.BarcodeFormat.UPC_A,
-            ZXing.BarcodeFormat.UPC_E,
-            ZXing.BarcodeFormat.CODE_39,
-            ZXing.BarcodeFormat.CODE_128
-        ]);
-        
-        const reader = new ZXing.MultiFormatReader();
-        reader.setHints(hints);
-        
-        let scannerActive = true;
-        let scanProgress = 0;
-        let lastSuccessTime = 0;
-        let consecutiveSuccesses = 0;
-        let lastDetectedCode = null;
-        
-        // Clean up function
-        const cancelScan = () => {
-            scannerActive = false;
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-            }
-            previewContainer.remove();
-        };
-        
-        // Handle cancel button
-        previewContainer.querySelector('.cancel-btn').onclick = cancelScan;
-        
-        // Manual frame capturing and analysis approach
-        const scanFrame = async () => {
-            if (!scannerActive) return;
-            
+        // Set up scanning interval
+        const scanInterval = setInterval(async () => {
             try {
-                // Only process if video is playing
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    // Reset progress slowly if no successful scan
-                    const now = Date.now();
-                    if (now - lastSuccessTime > 1000) {
-                        scanProgress = Math.max(0, scanProgress - 2);
-                        progressBar.style.width = `${scanProgress}%`;
-                    }
-                    
-                    // Set canvas dimensions to match video
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    
-                    // Draw current video frame to canvas
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    // Get image data for ZXing
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
-                    const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
-                    
-                    try {
-                        // Attempt to decode barcode from the frame
-                        const result = reader.decode(binaryBitmap, hints);
-                        
-                        if (result && result.getText()) {
-                            const detectedCode = result.getText();
-                            
-                            // Check if it's the same code as before
-                            if (detectedCode === lastDetectedCode) {
-                                // Update success stats
-                                lastSuccessTime = now;
-                                consecutiveSuccesses++;
-                                
-                                // Update progress bar
-                                scanProgress = Math.min(100, scanProgress + 10);
-                                progressBar.style.width = `${scanProgress}%`;
-                                
-                                // If we have enough consistent reads, consider it confirmed
-                                if (consecutiveSuccesses >= 3 || scanProgress >= 100) {
-                                    // Success! We've confirmed the barcode
-                                    scannerActive = false;
-                                    progressBar.style.width = '100%';
-                                    scanMessage.textContent = 'Barcode detected!';
-                                    scanMessage.style.color = '#00b894';
-                                    
-                                    setTimeout(() => {
-                                        cancelScan();
-                                        lookupProduct(detectedCode);
-                                    }, 500);
-                                    
-                                    return;
-                                }
-                            } else {
-                                // New code detected, start fresh
-                                lastDetectedCode = detectedCode;
-                                consecutiveSuccesses = 1;
-                                scanProgress = 20; // Start with some progress to show feedback
-                                progressBar.style.width = `${scanProgress}%`;
-                                lastSuccessTime = now;
-                            }
-                        }
-                    } catch (decodeError) {
-                        // Not a critical error, just means no barcode found in this frame
-                    }
-                }
-                
-                // Continue scanning if active
-                if (scannerActive) {
-                    requestAnimationFrame(scanFrame);
+                const result = await codeReader.decodeFromVideoElement(video);
+                if (result) {
+                    console.log('Barcode detected:', result.text);
+                    clearInterval(scanInterval);
+                    stream.getTracks().forEach(track => track.stop());
+                    previewContainer.remove();
+                    lookupProduct(result.text);
                 }
             } catch (error) {
-                console.error('Error scanning frame:', error);
-                if (scannerActive) {
-                    requestAnimationFrame(scanFrame);
+                if (error.message.includes('No MultiFormat Readers were able to detect the code')) {
+                    // This is normal when no barcode is detected
+                    return;
                 }
+                console.error('Scanning error:', error);
             }
+        }, 500); // Check every 500ms
+
+        // Handle cancel button
+        previewContainer.querySelector('.cancel-btn').onclick = () => {
+            clearInterval(scanInterval);
+            stream.getTracks().forEach(track => track.stop());
+            previewContainer.remove();
         };
-        
-        // Start the scanning process
-        requestAnimationFrame(scanFrame);
-        
+
     } catch (error) {
-        console.error('Error in barcode scanning:', error);
-        alert(`Error: ${error.message}\n\nPlease ensure:\n1. You have granted camera permissions\n2. You are using a supported browser\n3. Your device has a working camera`);
+        console.error('Error accessing camera:', error);
+        alert('Error accessing camera. Please ensure you have granted camera permissions and try again.');
     }
 }
 
