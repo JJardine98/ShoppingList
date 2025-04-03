@@ -83,46 +83,85 @@ function shareList() {
 // Barcode scanning functions
 async function startBarcodeScan() {
     try {
+        // Check if camera is available
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera access is not supported in your browser');
+        }
+        
         // Create preview container
         const previewContainer = document.createElement('div');
         previewContainer.className = 'camera-preview';
         previewContainer.innerHTML = `
             <div class="scanning-message">Point camera at barcode</div>
-            <div id="reader"></div>
+            <video id="scanner-video" autoplay playsinline></video>
             <button class="cancel-btn">Cancel</button>
         `;
         
         // Add preview to page
         document.body.appendChild(previewContainer);
         
-        // Initialize scanner with basic settings
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-            "reader",
-            {
-                fps: 10,
-                qrbox: 250
-            }
-        );
-
+        // Get video element
+        const video = document.getElementById('scanner-video');
+        
+        // Request camera access
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'environment',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
+        
+        // Set video source
+        video.srcObject = stream;
+        
+        // Wait for video to be ready
+        await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                video.play();
+                resolve();
+            };
+        });
+        
+        // Make sure ZXing is loaded
+        if (typeof ZXing === 'undefined') {
+            throw new Error('ZXing library not loaded. Please check your internet connection and refresh the page.');
+        }
+        
+        // Initialize barcode scanner
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        let scannerActive = true;
+        
+        // Function to handle results
+        const handleResult = (result) => {
+            if (!scannerActive) return;
+            
+            console.log('Barcode detected:', result.getText());
+            scannerActive = false;
+            
+            // Stop camera
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Remove preview
+            previewContainer.remove();
+            
+            // Look up product
+            lookupProduct(result.getText());
+        };
+        
         // Start scanning
-        html5QrcodeScanner.render(
-            (decodedText) => {
-                console.log('Barcode detected:', decodedText);
-                // Stop scanner
-                html5QrcodeScanner.clear();
-                // Remove preview
+        codeReader.decodeFromVideoDevice(undefined, 'scanner-video', handleResult)
+            .catch(error => {
+                console.error('Error starting barcode scanner:', error);
+                alert(`Error starting scanner: ${error.message}`);
                 previewContainer.remove();
-                // Look up product
-                lookupProduct(decodedText);
-            },
-            (error) => {
-                console.error('Scanning error:', error);
-            }
-        );
+            });
         
         // Handle cancel button
         previewContainer.querySelector('.cancel-btn').onclick = () => {
-            html5QrcodeScanner.clear();
+            scannerActive = false;
+            codeReader.reset();
+            stream.getTracks().forEach(track => track.stop());
             previewContainer.remove();
         };
         
@@ -165,4 +204,4 @@ document.getElementById('itemInput').addEventListener('keypress', function(e) {
 });
 
 // Initial render
-renderList(); 
+renderList();
