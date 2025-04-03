@@ -174,6 +174,23 @@ button {
     color: var(--text-muted);
 }
 
+.item-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.edit-btn {
+    background-color: var(--primary-color);
+    color: var(--bg-color);
+    padding: 0.5rem 0.8rem;
+    font-size: 0.9rem;
+    min-width: 60px;
+}
+
+.edit-btn:hover {
+    background-color: var(--primary-hover);
+}
+
 #shoppingList li button {
     background-color: var(--danger-color);
     color: var(--bg-color);

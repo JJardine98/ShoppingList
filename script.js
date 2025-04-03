@@ -18,7 +18,10 @@ function renderList() {
                 <input type="checkbox" id="item${index}" ${item.checked ? 'checked' : ''} onchange="event.stopPropagation()">
                 <span class="${item.checked ? 'checked' : ''}">${item.text}</span>
             </div>
-            <button onclick="removeItem(${index})">Remove</button>
+            <div class="item-actions">
+                <button onclick="editItem(${index})" class="edit-btn">Edit</button>
+                <button onclick="removeItem(${index})">Remove</button>
+            </div>
         `;
         listElement.appendChild(li);
     });
@@ -403,6 +406,17 @@ document.getElementById('itemInput').addEventListener('keypress', function(e) {
         addItem();
     }
 });
+
+function editItem(index) {
+    const item = shoppingList[index];
+    const newText = prompt('Edit item name:', item.text);
+    
+    if (newText && newText.trim() !== '') {
+        item.text = newText.trim();
+        saveList();
+        renderList();
+    }
+}
 
 // Initialize
 (function init() {
