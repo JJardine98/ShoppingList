@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopping List</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Shopping List</h1>
+            <div class="input-section">
+                <input type="text" id="itemInput" placeholder="Add new item...">
+                <button onclick="addItem()" class="add-btn">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <ul id="shoppingList" class="shopping-list">
+                <!-- Items will be added here dynamically -->
+            </ul>
+        </main>
+
+        <footer>
+            <div class="actions">
+                <button onclick="clearList()" class="clear-btn">
+                    <i class="fas fa-trash"></i> Clear All
+                </button>
+                <button onclick="shareList()" class="share-btn">
+                    <i class="fas fa-share-alt"></i> Share
+                </button>
+            </div>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
