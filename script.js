@@ -153,12 +153,19 @@ async function startBarcodeScan() {
         // Get video element
         const video = document.getElementById('scanner-video');
 
-        // Request camera access
+        // Request camera access with higher quality settings
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { 
                 facingMode: 'environment',
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                width: { ideal: 1920, min: 1280 },
+                height: { ideal: 1080, min: 720 },
+                frameRate: { ideal: 30, min: 24 },
+                focusMode: 'continuous',
+                advanced: [
+                    { focusMode: 'continuous' },
+                    { whiteBalanceMode: 'continuous' },
+                    { exposureMode: 'continuous' }
+                ]
             } 
         });
 
@@ -173,12 +180,19 @@ async function startBarcodeScan() {
             };
         });
 
-        // Initialize barcode detector
+        // Initialize barcode detector with all supported formats
         const barcodeDetector = new BarcodeDetector({
-            formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'itf']
+            formats: [
+                'ean_13', 'ean_8', 'upc_a', 'upc_e',
+                'code_128', 'code_39', 'code_93', 'itf',
+                'codabar', 'code_128', 'code_39', 'code_93',
+                'itf', 'qr_code', 'data_matrix', 'aztec'
+            ]
         });
 
         let isScanning = true;
+        let lastDetectedCode = null;
+        let detectionCount = 0;
 
         // Start scanning loop
         async function scan() {
@@ -189,23 +203,39 @@ async function startBarcodeScan() {
                 
                 if (barcodes.length > 0) {
                     const barcode = barcodes[0];
-                    console.log('Barcode detected:', barcode.rawValue);
-                    
-                    isScanning = false;
-                    stream.getTracks().forEach(track => track.stop());
-                    previewContainer.remove();
-                    
-                    try {
-                        await lookupProduct(barcode.rawValue);
-                    } catch (error) {
-                        console.error('Error looking up product:', error);
-                        alert('Product not found. Adding barcode instead.');
-                        addItem(barcode.rawValue);
+                    console.log('Barcode details:', {
+                        rawValue: barcode.rawValue,
+                        format: barcode.format,
+                        cornerPoints: barcode.cornerPoints
+                    });
+
+                    // Only process if we've seen this code multiple times to reduce false positives
+                    if (barcode.rawValue === lastDetectedCode) {
+                        detectionCount++;
+                        if (detectionCount >= 3) {
+                            console.log('Confirmed barcode:', barcode.rawValue);
+                            isScanning = false;
+                            stream.getTracks().forEach(track => track.stop());
+                            previewContainer.remove();
+                            
+                            try {
+                                await lookupProduct(barcode.rawValue);
+                            } catch (error) {
+                                console.error('Error looking up product:', error);
+                                alert('Product not found. Adding barcode instead.');
+                                addItem(barcode.rawValue);
+                            }
+                        }
+                    } else {
+                        lastDetectedCode = barcode.rawValue;
+                        detectionCount = 1;
                     }
                 } else {
-                    // Continue scanning
-                    requestAnimationFrame(scan);
+                    detectionCount = 0;
                 }
+
+                // Continue scanning
+                requestAnimationFrame(scan);
             } catch (error) {
                 console.error('Scanning error:', error);
                 requestAnimationFrame(scan);
