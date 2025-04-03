@@ -80,7 +80,6 @@ function shareList() {
     }
 }
 
-// Barcode scanning functions
 async function startBarcodeScan() {
     try {
         // Check if camera is available
@@ -118,7 +117,6 @@ async function startBarcodeScan() {
         // Wait for video to be ready
         await new Promise((resolve) => {
             video.onloadedmetadata = () => {
-                video.play();
                 resolve();
             };
         });
@@ -132,15 +130,24 @@ async function startBarcodeScan() {
         const codeReader = new ZXing.BrowserMultiFormatReader();
         let scannerActive = true;
         
-        // Function to handle results
+        // Function to handle results - add null check
         const handleResult = (result) => {
             if (!scannerActive) return;
+            
+            // Check if result is null
+            if (!result) {
+                console.log('No barcode detected');
+                return;
+            }
             
             console.log('Barcode detected:', result.getText());
             scannerActive = false;
             
             // Stop camera
             stream.getTracks().forEach(track => track.stop());
+            
+            // Reset code reader
+            codeReader.reset();
             
             // Remove preview
             previewContainer.remove();
@@ -149,50 +156,29 @@ async function startBarcodeScan() {
             lookupProduct(result.getText());
         };
         
-        // Start scanning
-        codeReader.decodeFromVideoDevice(undefined, 'scanner-video', handleResult)
-            .catch(error => {
-                console.error('Error starting barcode scanner:', error);
-                alert(`Error starting scanner: ${error.message}`);
-                previewContainer.remove();
-            });
-        
-        // Handle cancel button
-        previewContainer.querySelector('.cancel-btn').onclick = () => {
+        // Cancel function to clean up resources
+        const cancelScan = () => {
             scannerActive = false;
             codeReader.reset();
             stream.getTracks().forEach(track => track.stop());
             previewContainer.remove();
         };
         
+        // Handle cancel button
+        previewContainer.querySelector('.cancel-btn').onclick = cancelScan;
+        
+        // Start scanning with proper error handling
+        try {
+            await codeReader.decodeFromVideoDevice(undefined, 'scanner-video', handleResult);
+        } catch (scanError) {
+            console.error('Error during scanning:', scanError);
+            alert(`Error during scanning: ${scanError.message}`);
+            cancelScan();
+        }
+        
     } catch (error) {
         console.error('Error in barcode scanning:', error);
         alert(`Error: ${error.message}\n\nPlease ensure:\n1. You have granted camera permissions\n2. You are using a supported browser\n3. Your device has a working camera`);
-    }
-}
-
-async function lookupProduct(barcode) {
-    try {
-        const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-        const data = await response.json();
-        
-        if (data.status === 1 && data.product) {
-            const product = data.product;
-            const itemName = product.product_name || product.generic_name || 'Unknown Product';
-            
-            // Add to shopping list
-            shoppingList.push({ 
-                text: itemName,
-                checked: false
-            });
-            saveList();
-            renderList();
-        } else {
-            alert('Product not found. Please try again or add manually.');
-        }
-    } catch (error) {
-        console.error('Error looking up product:', error);
-        alert('Error looking up product. Please try again or add manually.');
     }
 }
 
