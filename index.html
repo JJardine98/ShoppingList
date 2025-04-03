@@ -6,6 +6,38 @@
     <title>Shopping List</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script>
+        // API Configuration - This will be replaced by Netlify at build time
+        window.API_CONFIG = {
+            // Free APIs (no key required)
+            OPEN_FOOD_FACTS: {
+                url: 'https://world.openfoodfacts.org/api/v0/product/',
+                enabled: true
+            },
+            BARCODE_LOOKUP: {
+                url: 'https://api.barcodelookup.com/v3/products',
+                key: 'free',
+                enabled: true
+            },
+            // APIs requiring keys (these will be replaced by Netlify)
+            UPC_DATABASE: {
+                url: 'https://api.upcdatabase.org/product/',
+                key: '%UPC_DATABASE_KEY%',
+                enabled: '%UPC_DATABASE_KEY%' !== '%UPC_DATABASE_KEY%'
+            },
+            // Additional free APIs
+            UPC_ITEM_DB: {
+                url: 'https://api.upcitemdb.com/prod/trial/lookup',
+                key: 'free',
+                enabled: true
+            },
+            PRODUCT_OPEN_DATA: {
+                url: 'https://product-open-data.com/api/v1/products/',
+                key: 'free',
+                enabled: true
+            }
+        };
+    </script>
 </head>
 <body>
     <div class="container">

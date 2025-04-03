@@ -264,47 +264,81 @@ async function startBarcodeScan() {
 // Product lookup function
 async function lookupProduct(barcode) {
     try {
-        // First try Open Food Facts (for food items)
-        const foodResponse = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-        const foodData = await foodResponse.json();
-
-        if (foodData.status === 1 && foodData.product) {
-            const product = foodData.product;
-            let itemName = product.product_name || product.generic_name;
-            
-            if (!itemName || itemName.trim() === '') {
-                itemName = 'Unknown Product (' + barcode + ')';
+        // Try each API in sequence until we find a match
+        const apis = [
+            // Open Food Facts (food items)
+            async () => {
+                if (!API_CONFIG.OPEN_FOOD_FACTS.enabled) return null;
+                const response = await fetch(`${API_CONFIG.OPEN_FOOD_FACTS.url}${barcode}.json`);
+                const data = await response.json();
+                if (data.status === 1 && data.product) {
+                    return data.product.product_name || data.product.generic_name;
+                }
+                return null;
+            },
+            // Barcodelookup.com (general items)
+            async () => {
+                if (!API_CONFIG.BARCODE_LOOKUP.enabled) return null;
+                const response = await fetch(`${API_CONFIG.BARCODE_LOOKUP.url}?barcode=${barcode}&formatted=y&key=${API_CONFIG.BARCODE_LOOKUP.key}`);
+                const data = await response.json();
+                if (data.products && data.products.length > 0) {
+                    return data.products[0].title || data.products[0].description;
+                }
+                return null;
+            },
+            // UPC Item DB (free trial)
+            async () => {
+                if (!API_CONFIG.UPC_ITEM_DB.enabled) return null;
+                const response = await fetch(`${API_CONFIG.UPC_ITEM_DB.url}?upc=${barcode}`);
+                const data = await response.json();
+                if (data.items && data.items.length > 0) {
+                    return data.items[0].title || data.items[0].description;
+                }
+                return null;
+            },
+            // Product Open Data
+            async () => {
+                if (!API_CONFIG.PRODUCT_OPEN_DATA.enabled) return null;
+                const response = await fetch(`${API_CONFIG.PRODUCT_OPEN_DATA.url}${barcode}`);
+                const data = await response.json();
+                if (data.name) {
+                    return data.name;
+                }
+                return null;
+            },
+            // UPC Database (if key is available)
+            async () => {
+                if (!API_CONFIG.UPC_DATABASE.enabled) return null;
+                const response = await fetch(`${API_CONFIG.UPC_DATABASE.url}${barcode}?apikey=${API_CONFIG.UPC_DATABASE.key}`);
+                const data = await response.json();
+                if (data.success && data.title) {
+                    return data.title;
+                }
+                return null;
             }
-            
-            // Add to shopping list
-            shoppingList.push({ 
-                text: itemName,
-                checked: false
-            });
-            saveList();
-            renderList();
-            return;
+        ];
+
+        // Try each API in sequence
+        for (const api of apis) {
+            try {
+                const result = await api();
+                if (result) {
+                    // Found a match, add to shopping list
+                    shoppingList.push({ 
+                        text: result,
+                        checked: false
+                    });
+                    saveList();
+                    renderList();
+                    return;
+                }
+            } catch (error) {
+                console.error('Error with API:', error);
+                // Continue to next API
+            }
         }
 
-        // If not found in Open Food Facts, try Barcodelookup.com (for non-food items)
-        const barcodeResponse = await fetch(`https://api.barcodelookup.com/v3/products?barcode=${barcode}&formatted=y&key=free`);
-        const barcodeData = await barcodeResponse.json();
-
-        if (barcodeData.products && barcodeData.products.length > 0) {
-            const product = barcodeData.products[0];
-            let itemName = product.title || product.description || `Unknown product (${barcode})`;
-            
-            // Add to shopping list
-            shoppingList.push({ 
-                text: itemName,
-                checked: false
-            });
-            saveList();
-            renderList();
-            return;
-        }
-
-        // If not found in either database, add the barcode
+        // If no API found a match, add the barcode
         shoppingList.push({ 
             text: `Unknown product (${barcode})`,
             checked: false
