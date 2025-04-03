@@ -80,6 +80,84 @@ function shareList() {
     }
 }
 
+// Barcode scanning functions
+async function startBarcodeScan() {
+    try {
+        // Request camera access
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        
+        // Create video element
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.play();
+        
+        // Create preview container
+        const previewContainer = document.createElement('div');
+        previewContainer.className = 'camera-preview';
+        previewContainer.innerHTML = `
+            <div class="scanning-message">Point camera at barcode</div>
+            <video autoplay playsinline></video>
+            <button class="cancel-btn">Cancel</button>
+        `;
+        
+        // Add preview to page
+        document.body.appendChild(previewContainer);
+        
+        // Initialize barcode scanner
+        const codeReader = new ZXing.BrowserBarcodeReader();
+        
+        // Start scanning
+        codeReader.decodeFromVideoDevice(null, video, (result, err) => {
+            if (result) {
+                // Stop camera
+                stream.getTracks().forEach(track => track.stop());
+                previewContainer.remove();
+                
+                // Look up product
+                lookupProduct(result.text);
+            }
+            if (err && !(err instanceof ZXing.NotFoundException)) {
+                console.error('Error scanning:', err);
+            }
+        });
+        
+        // Handle cancel button
+        previewContainer.querySelector('.cancel-btn').onclick = () => {
+            stream.getTracks().forEach(track => track.stop());
+            previewContainer.remove();
+        };
+        
+    } catch (error) {
+        console.error('Error accessing camera:', error);
+        alert('Could not access camera. Please ensure you have granted camera permissions.');
+    }
+}
+
+async function lookupProduct(barcode) {
+    try {
+        const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        const data = await response.json();
+        
+        if (data.status === 1 && data.product) {
+            const product = data.product;
+            const itemName = product.product_name || product.generic_name || 'Unknown Product';
+            
+            // Add to shopping list
+            shoppingList.push({ 
+                text: itemName,
+                checked: false
+            });
+            saveList();
+            renderList();
+        } else {
+            alert('Product not found. Please try again or add manually.');
+        }
+    } catch (error) {
+        console.error('Error looking up product:', error);
+        alert('Error looking up product. Please try again or add manually.');
+    }
+}
+
 // Add event listener for Enter key
 document.getElementById('itemInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {

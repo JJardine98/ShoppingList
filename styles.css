@@ -112,6 +112,27 @@ button {
     font-size: 1.2rem;
 }
 
+.scan-btn {
+    background-color: var(--primary-color);
+    color: var(--bg-color);
+    padding: 0.8rem;
+    border-radius: 8px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.scan-btn:hover {
+    background-color: var(--primary-hover);
+}
+
+.scan-btn i {
+    font-size: 1.2rem;
+}
+
 .shopping-list {
     list-style: none;
     margin-bottom: 1rem;
@@ -201,6 +222,52 @@ footer {
 
 .share-btn:hover {
     background-color: var(--primary-hover);
+}
+
+.camera-preview {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.camera-preview video {
+    max-width: 100%;
+    max-height: 70vh;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.camera-preview .cancel-btn {
+    margin: 0.5rem;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: var(--danger-color);
+    color: var(--bg-color);
+    font-weight: 500;
+}
+
+.camera-preview .cancel-btn:hover {
+    background-color: var(--danger-hover);
+}
+
+.camera-preview .scanning-message {
+    color: var(--text-color);
+    margin-bottom: 1rem;
+    text-align: center;
+    font-size: 1.1rem;
 }
 
 @media (max-width: 480px) {
