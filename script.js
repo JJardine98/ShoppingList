@@ -114,14 +114,14 @@ async function startBarcodeScan() {
                 fps: 10,
                 qrbox: { width: 250, height: 250 },
                 formatsToSupport: [
-                    Html5Qrcode.FORMATS.EAN_13,
-                    Html5Qrcode.FORMATS.EAN_8,
-                    Html5Qrcode.FORMATS.UPC_A,
-                    Html5Qrcode.FORMATS.UPC_E,
-                    Html5Qrcode.FORMATS.CODE_128,
-                    Html5Qrcode.FORMATS.CODE_39,
-                    Html5Qrcode.FORMATS.CODE_93,
-                    Html5Qrcode.FORMATS.ITF
+                    "EAN_13",
+                    "EAN_8",
+                    "UPC_A",
+                    "UPC_E",
+                    "CODE_128",
+                    "CODE_39",
+                    "CODE_93",
+                    "ITF"
                 ]
             },
             false
