@@ -130,37 +130,66 @@ async function startBarcodeScan() {
             };
         });
         
-        // Initialize barcode scanner
+        // Initialize barcode scanner with specific settings
         const codeReader = new ZXing.BrowserBarcodeReader({
             tryHarder: true,
             formats: [
                 ZXing.BarcodeFormat.EAN_13,
                 ZXing.BarcodeFormat.EAN_8,
                 ZXing.BarcodeFormat.UPC_A,
-                ZXing.BarcodeFormat.UPC_E
-            ]
+                ZXing.BarcodeFormat.UPC_E,
+                ZXing.BarcodeFormat.CODE_128,
+                ZXing.BarcodeFormat.CODE_39,
+                ZXing.BarcodeFormat.ITF
+            ],
+            hints: new Map([
+                [ZXing.DecodeHintType.TRYHARDER, true],
+                [ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                    ZXing.BarcodeFormat.EAN_13,
+                    ZXing.BarcodeFormat.EAN_8,
+                    ZXing.BarcodeFormat.UPC_A,
+                    ZXing.BarcodeFormat.UPC_E,
+                    ZXing.BarcodeFormat.CODE_128,
+                    ZXing.BarcodeFormat.CODE_39,
+                    ZXing.BarcodeFormat.ITF
+                ]]
+            ])
         });
         
         console.log('Starting barcode scanning...');
         
-        // Start scanning
-        codeReader.decodeFromVideoDevice(null, video, (result, err) => {
-            if (result) {
-                console.log('Barcode detected:', result.text);
-                // Stop camera
-                stream.getTracks().forEach(track => track.stop());
-                previewContainer.remove();
-                
-                // Look up product
-                lookupProduct(result.text);
+        // Start scanning with error handling
+        let isScanning = true;
+        const scanInterval = setInterval(() => {
+            if (!isScanning) {
+                clearInterval(scanInterval);
+                return;
             }
-            if (err && !(err instanceof ZXing.NotFoundException)) {
-                console.error('Error scanning:', err);
-            }
-        });
+            
+            codeReader.decodeFromVideoElement(video)
+                .then(result => {
+                    console.log('Barcode detected:', result);
+                    isScanning = false;
+                    clearInterval(scanInterval);
+                    
+                    // Stop camera
+                    stream.getTracks().forEach(track => track.stop());
+                    previewContainer.remove();
+                    
+                    // Look up product
+                    lookupProduct(result.text);
+                })
+                .catch(err => {
+                    if (!(err instanceof ZXing.NotFoundException)) {
+                        console.error('Scanning error:', err);
+                    }
+                });
+        }, 100); // Scan every 100ms
         
         // Handle cancel button
         previewContainer.querySelector('.cancel-btn').onclick = () => {
+            isScanning = false;
+            clearInterval(scanInterval);
             stream.getTracks().forEach(track => track.stop());
             previewContainer.remove();
         };
