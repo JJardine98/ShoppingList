@@ -264,20 +264,12 @@ async function startBarcodeScan() {
 // Product lookup function
 async function lookupProduct(barcode) {
     try {
-        // Show loading indicator
-        const loadingToast = document.createElement('div');
-        loadingToast.className = 'toast loading';
-        loadingToast.textContent = 'Looking up product...';
-        document.body.appendChild(loadingToast);
-        
-        const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-        const data = await response.json();
-        
-        // Remove loading indicator
-        loadingToast.remove();
-        
-        if (data.status === 1 && data.product) {
-            const product = data.product;
+        // First try Open Food Facts (for food items)
+        const foodResponse = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        const foodData = await foodResponse.json();
+
+        if (foodData.status === 1 && foodData.product) {
+            const product = foodData.product;
             let itemName = product.product_name || product.generic_name;
             
             if (!itemName || itemName.trim() === '') {
@@ -291,62 +283,44 @@ async function lookupProduct(barcode) {
             });
             saveList();
             renderList();
+            return;
+        }
+
+        // If not found in Open Food Facts, try Barcodelookup.com (for non-food items)
+        const barcodeResponse = await fetch(`https://api.barcodelookup.com/v3/products?barcode=${barcode}&formatted=y&key=free`);
+        const barcodeData = await barcodeResponse.json();
+
+        if (barcodeData.products && barcodeData.products.length > 0) {
+            const product = barcodeData.products[0];
+            let itemName = product.title || product.description || `Unknown product (${barcode})`;
             
-            // Show success toast
-            const successToast = document.createElement('div');
-            successToast.className = 'toast success';
-            successToast.textContent = `Added: ${itemName}`;
-            document.body.appendChild(successToast);
-            
-            // Remove toast after 3 seconds
-            setTimeout(() => {
-                successToast.classList.add('fade-out');
-                setTimeout(() => successToast.remove(), 500);
-            }, 3000);
-            
-        } else {
-            // Show not found toast
-            const errorToast = document.createElement('div');
-            errorToast.className = 'toast error';
-            errorToast.textContent = 'Product not found. Adding barcode instead.';
-            document.body.appendChild(errorToast);
-            
-            // Add barcode as an item
+            // Add to shopping list
             shoppingList.push({ 
-                text: `Unknown product (${barcode})`,
+                text: itemName,
                 checked: false
             });
             saveList();
             renderList();
-            
-            // Remove toast after 3 seconds
-            setTimeout(() => {
-                errorToast.classList.add('fade-out');
-                setTimeout(() => errorToast.remove(), 500);
-            }, 3000);
+            return;
         }
-    } catch (error) {
-        console.error('Error looking up product:', error);
-        
-        // Show error toast
-        const errorToast = document.createElement('div');
-        errorToast.className = 'toast error';
-        errorToast.textContent = 'Error looking up product. Adding barcode instead.';
-        document.body.appendChild(errorToast);
-        
-        // Add barcode as an item
+
+        // If not found in either database, add the barcode
         shoppingList.push({ 
             text: `Unknown product (${barcode})`,
             checked: false
         });
         saveList();
         renderList();
-        
-        // Remove toast after 3 seconds
-        setTimeout(() => {
-            errorToast.classList.add('fade-out');
-            setTimeout(() => errorToast.remove(), 500);
-        }, 3000);
+
+    } catch (error) {
+        console.error('Error looking up product:', error);
+        // If there's an error, just add the barcode
+        shoppingList.push({ 
+            text: `Unknown product (${barcode})`,
+            checked: false
+        });
+        saveList();
+        renderList();
     }
 }
 
