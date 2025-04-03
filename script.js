@@ -80,6 +80,7 @@ function shareList() {
     }
 }
 
+// Barcode scanning functions
 async function startBarcodeScan() {
     try {
         // Check if camera is available
@@ -179,6 +180,31 @@ async function startBarcodeScan() {
     } catch (error) {
         console.error('Error in barcode scanning:', error);
         alert(`Error: ${error.message}\n\nPlease ensure:\n1. You have granted camera permissions\n2. You are using a supported browser\n3. Your device has a working camera`);
+    }
+}
+
+async function lookupProduct(barcode) {
+    try {
+        const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        const data = await response.json();
+        
+        if (data.status === 1 && data.product) {
+            const product = data.product;
+            const itemName = product.product_name || product.generic_name || 'Unknown Product';
+            
+            // Add to shopping list
+            shoppingList.push({ 
+                text: itemName,
+                checked: false
+            });
+            saveList();
+            renderList();
+        } else {
+            alert('Product not found. Please try again or add manually.');
+        }
+    } catch (error) {
+        console.error('Error looking up product:', error);
+        alert('Error looking up product. Please try again or add manually.');
     }
 }
 
