@@ -88,8 +88,8 @@ async function startBarcodeScan() {
             throw new Error('Camera access is not supported in this browser');
         }
 
-        // Check if Quagga is loaded
-        if (!window.Quagga) {
+        // Check if Html5QrcodeScanner is loaded
+        if (!window.Html5QrcodeScanner) {
             throw new Error('Barcode scanning library not loaded');
         }
 
@@ -100,72 +100,52 @@ async function startBarcodeScan() {
         previewContainer.className = 'camera-preview';
         previewContainer.innerHTML = `
             <div class="scanning-message">Point camera at barcode</div>
-            <div id="interactive" class="viewport"></div>
+            <div id="reader"></div>
             <button class="cancel-btn">Cancel</button>
         `;
         
         // Add preview to page
         document.body.appendChild(previewContainer);
         
-        // Initialize Quagga
-        Quagga.init({
-            inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                target: document.querySelector('#interactive'),
-                constraints: {
-                    facingMode: "environment",
-                    width: { min: 640, ideal: 1280, max: 1920 },
-                    height: { min: 480, ideal: 720, max: 1080 }
-                }
-            },
-            locator: {
-                patchSize: "medium",
-                halfSample: true
-            },
-            numOfWorkers: 2,
-            decoder: {
-                readers: [
-                    "ean_reader",
-                    "ean_8_reader",
-                    "upc_reader",
-                    "upc_e_reader",
-                    "code_128_reader",
-                    "code_39_reader",
-                    "code_39_vin_reader",
-                    "codabar_reader",
-                    "i2of5_reader"
+        // Initialize scanner
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                formatsToSupport: [
+                    Html5Qrcode.FORMATS.EAN_13,
+                    Html5Qrcode.FORMATS.EAN_8,
+                    Html5Qrcode.FORMATS.UPC_A,
+                    Html5Qrcode.FORMATS.UPC_E,
+                    Html5Qrcode.FORMATS.CODE_128,
+                    Html5Qrcode.FORMATS.CODE_39,
+                    Html5Qrcode.FORMATS.CODE_93,
+                    Html5Qrcode.FORMATS.ITF
                 ]
             },
-            locate: true
-        }, function(err) {
-            if (err) {
-                console.error('Error initializing Quagga:', err);
-                alert('Error initializing barcode scanner. Please try again.');
-                return;
-            }
-            console.log('Quagga initialized successfully');
-            Quagga.start();
-        });
+            false
+        );
 
-        // Handle barcode detection
-        Quagga.onDetected(function(result) {
-            console.log('Barcode detected:', result);
-            const code = result.codeResult.code;
-            
-            // Stop Quagga
-            Quagga.stop();
-            
-            // Remove preview
-            previewContainer.remove();
-            
-            // Look up product
-            lookupProduct(code);
-        });
+        // Start scanning
+        html5QrcodeScanner.render(
+            (decodedText, decodedResult) => {
+                console.log('Barcode detected:', decodedText);
+                // Stop scanner
+                html5QrcodeScanner.clear();
+                // Remove preview
+                previewContainer.remove();
+                // Look up product
+                lookupProduct(decodedText);
+            },
+            (error) => {
+                console.error('Scanning error:', error);
+            }
+        );
         
         // Handle cancel button
         previewContainer.querySelector('.cancel-btn').onclick = () => {
-            Quagga.stop();
+            html5QrcodeScanner.clear();
             previewContainer.remove();
         };
         
