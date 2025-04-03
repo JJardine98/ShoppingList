@@ -179,10 +179,17 @@ async function startBarcodeScan() {
                 const result = await codeReader.decodeFromVideoElement(video);
                 if (result) {
                     console.log('Barcode detected:', result.text);
-                    clearInterval(scanInterval);
-                    stream.getTracks().forEach(track => track.stop());
-                    previewContainer.remove();
-                    lookupProduct(result.text);
+                    
+                    // Only stop scanning if the product lookup is successful
+                    try {
+                        await lookupProduct(result.text);
+                        clearInterval(scanInterval);
+                        stream.getTracks().forEach(track => track.stop());
+                        previewContainer.remove();
+                    } catch (error) {
+                        console.error('Error looking up product:', error);
+                        // Keep scanning if product lookup fails
+                    }
                 }
             } catch (error) {
                 if (error.message.includes('No MultiFormat Readers were able to detect the code')) {
