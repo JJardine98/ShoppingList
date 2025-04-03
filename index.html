@@ -19,12 +19,6 @@
                 key: 'free',
                 enabled: true
             },
-            // APIs requiring keys (these will be replaced by Netlify)
-            UPC_DATABASE: {
-                url: 'https://api.upcdatabase.org/product/',
-                key: '%UPC_DATABASE_KEY%',
-                enabled: '%UPC_DATABASE_KEY%' !== '%UPC_DATABASE_KEY%'
-            },
             // Additional free APIs
             UPC_ITEM_DB: {
                 url: 'https://api.upcitemdb.com/prod/trial/lookup',
@@ -35,6 +29,23 @@
                 url: 'https://product-open-data.com/api/v1/products/',
                 key: 'free',
                 enabled: true
+            },
+            // New APIs for household and personal care items
+            UPC_LOOKUP: {
+                url: 'https://www.upclookup.com/api/v1/products/',
+                key: 'free',
+                enabled: true
+            },
+            BARCODE_SPIDER: {
+                url: 'https://api.barcodespider.com/v1/product',
+                key: 'free',
+                enabled: true
+            },
+            // Optional paid API
+            UPC_DATABASE: {
+                url: 'https://api.upcdatabase.org/product/',
+                key: '%UPC_DATABASE_KEY%',
+                enabled: '%UPC_DATABASE_KEY%' !== '%UPC_DATABASE_KEY%'
             }
         };
     </script>

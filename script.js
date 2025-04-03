@@ -306,6 +306,26 @@ async function lookupProduct(barcode) {
                 }
                 return null;
             },
+            // UPC Lookup (household items)
+            async () => {
+                if (!API_CONFIG.UPC_LOOKUP.enabled) return null;
+                const response = await fetch(`${API_CONFIG.UPC_LOOKUP.url}${barcode}`);
+                const data = await response.json();
+                if (data.product && data.product.name) {
+                    return data.product.name;
+                }
+                return null;
+            },
+            // Barcode Spider (personal care items)
+            async () => {
+                if (!API_CONFIG.BARCODE_SPIDER.enabled) return null;
+                const response = await fetch(`${API_CONFIG.BARCODE_SPIDER.url}?upc=${barcode}&token=${API_CONFIG.BARCODE_SPIDER.key}`);
+                const data = await response.json();
+                if (data.item_attributes && data.item_attributes.title) {
+                    return data.item_attributes.title;
+                }
+                return null;
+            },
             // UPC Database (if key is available)
             async () => {
                 if (!API_CONFIG.UPC_DATABASE.enabled) return null;
