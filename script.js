@@ -88,80 +88,84 @@ async function startBarcodeScan() {
             throw new Error('Camera access is not supported in this browser');
         }
 
-        // Check if ZXing is loaded
-        if (!window.ZXing) {
+        // Check if Quagga is loaded
+        if (!window.Quagga) {
             throw new Error('Barcode scanning library not loaded');
         }
 
         console.log('Requesting camera access...');
-        
-        // Request camera access
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: 'environment', // Prefer rear camera
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            } 
-        });
-        
-        console.log('Camera access granted');
         
         // Create preview container
         const previewContainer = document.createElement('div');
         previewContainer.className = 'camera-preview';
         previewContainer.innerHTML = `
             <div class="scanning-message">Point camera at barcode</div>
-            <video id="scanner-video" autoplay playsinline></video>
+            <div id="interactive" class="viewport"></div>
             <button class="cancel-btn">Cancel</button>
         `;
         
         // Add preview to page
         document.body.appendChild(previewContainer);
         
-        // Get video element
-        const video = document.getElementById('scanner-video');
-        video.srcObject = stream;
-        
-        // Wait for video to be ready
-        await new Promise((resolve) => {
-            video.onloadedmetadata = () => {
-                video.play();
-                resolve();
-            };
-        });
-        
-        // Initialize barcode scanner
-        const codeReader = new ZXing.BrowserBarcodeReader({
-            tryHarder: true,
-            formats: [
-                ZXing.BarcodeFormat.EAN_13,
-                ZXing.BarcodeFormat.EAN_8,
-                ZXing.BarcodeFormat.UPC_A,
-                ZXing.BarcodeFormat.UPC_E
-            ]
-        });
-        
-        console.log('Starting barcode scanning...');
-        
-        // Start scanning
-        codeReader.decodeFromVideoDevice(null, video, (result, err) => {
-            if (result) {
-                console.log('Barcode detected:', result);
-                // Stop camera
-                stream.getTracks().forEach(track => track.stop());
-                previewContainer.remove();
-                
-                // Look up product
-                lookupProduct(result.text);
+        // Initialize Quagga
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector('#interactive'),
+                constraints: {
+                    facingMode: "environment",
+                    width: { min: 640, ideal: 1280, max: 1920 },
+                    height: { min: 480, ideal: 720, max: 1080 }
+                }
+            },
+            locator: {
+                patchSize: "medium",
+                halfSample: true
+            },
+            numOfWorkers: 2,
+            decoder: {
+                readers: [
+                    "ean_reader",
+                    "ean_8_reader",
+                    "upc_reader",
+                    "upc_e_reader",
+                    "code_128_reader",
+                    "code_39_reader",
+                    "code_39_vin_reader",
+                    "codabar_reader",
+                    "i2of5_reader"
+                ]
+            },
+            locate: true
+        }, function(err) {
+            if (err) {
+                console.error('Error initializing Quagga:', err);
+                alert('Error initializing barcode scanner. Please try again.');
+                return;
             }
-            if (err && !(err instanceof ZXing.NotFoundException)) {
-                console.error('Error scanning:', err);
-            }
+            console.log('Quagga initialized successfully');
+            Quagga.start();
+        });
+
+        // Handle barcode detection
+        Quagga.onDetected(function(result) {
+            console.log('Barcode detected:', result);
+            const code = result.codeResult.code;
+            
+            // Stop Quagga
+            Quagga.stop();
+            
+            // Remove preview
+            previewContainer.remove();
+            
+            // Look up product
+            lookupProduct(code);
         });
         
         // Handle cancel button
         previewContainer.querySelector('.cancel-btn').onclick = () => {
-            stream.getTracks().forEach(track => track.stop());
+            Quagga.stop();
             previewContainer.remove();
         };
         
